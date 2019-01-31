@@ -22,6 +22,7 @@ object First {
 
     val sc = new SparkContext(conf)
 
+    //val firstLine = sc.textFile("./resources/test_data").take(1)
     val firstLine = sc.textFile("./resources/test_data").first
 
     println(firstLine)
