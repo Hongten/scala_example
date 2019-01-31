@@ -10,7 +10,6 @@ import org.apache.spark.SparkConf
 import org.apache.spark.SparkContext
 
 /**
- *
  * 功能：
  * 1.将数据放入磁盘
  * 2.有切断RDD之间的依赖关系
