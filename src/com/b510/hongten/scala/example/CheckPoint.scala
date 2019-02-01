@@ -21,6 +21,17 @@ import org.apache.spark.SparkContext
  * 与persist区别：
  * persist：Application运行完，数据会被回收
  * checkpoint：Application运行完，数据还存在磁盘
+ * 
+ * 
+ * 执行流程：
+ * 1.当application有action触发执行时，job执行完成后，会从后往前回溯
+ * 2.回溯去找有哪些RDD被checkpoint，被checkpoint的做标记
+ * 3.回溯完成之后，重新计算checkpoint的RDD的数据，将结果写入指定的checkpoint目录中
+ * 4.切断RDD的依赖关系
+ * 
+ * 优化：
+ * 对RDD checkpoint之前，最好先cache一下，这样读取该RDD就会从内存中读取
+ * 
  *
  * @author Hongten
  * @created 31 Jan, 2019

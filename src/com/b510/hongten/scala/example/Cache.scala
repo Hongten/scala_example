@@ -13,7 +13,7 @@ import org.apache.spark.SparkContext
  * 
  * 运行结果： 不同的机器，结果不同，但是我们发现，使用了cache方法，速度明显快了很多
  * 
- * Cache默认将数据存入内存中，是持久化算子，懒执行算子，需要Action算子触发
+ * Cache默认将数据存入内存中，是持久化算子，懒执行算子，需要Action算子触发，cache的最小单位是partition
  *
  * @author Hongten
  * @created 31 Jan, 2019

@@ -18,7 +18,7 @@ import org.apache.spark.storage.StorageLevel
  *
  * 持久化算子
  *
- * 可以手动指定持久化级别
+ * 可以手动指定持久化级别，懒执行，最小单位是partition，需要Action算子触发执行
  *
  *
  * private var _useDisk: Boolean,               --使用磁盘
