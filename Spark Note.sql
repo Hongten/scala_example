@@ -363,7 +363,7 @@ Spark：
 如：reduceByKey(rdd, numPartition), join(rdd, numPartition)
 
 
---管道中的数据，上面时候落地
+--管道中的数据，什么时候落地
 1.shuffle write
 2.对RDD进程持久化操作（cache，persist， checkpoint）
 
