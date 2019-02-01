@@ -207,7 +207,7 @@ standalone模式提交任务 - client方式提交任务流程 - 默认模式
 在这种模式下面，我们在客户端看到Task执行的详细信息还有最终的结果。
 当在客户端提交多个application时，每个application都会启动自己的Driver
 这些Driver和Worker有大量的通行，会造成客户端网卡浏览暴增问题，
-这种模式适合于测试，不适合生成环境。
+这种模式适合于测试，不适合生产环境。
 
 
 --standalone模式提交任务 - cluster方式提交任务
@@ -229,15 +229,92 @@ standalone模式提交任务 - cluster方式提交任务流程
 在这种模式下面，我们在客户端看不到Task执行的详细信息和结果。
 可以在WebUI上Completed Drivers里面可以查看到结果和执行的详细信息
 如果在客户端提交多个application，那么每个application的Driver会被分散到集群的Worker节点中，
-相当于将客户端模式的客户端网卡流量暴增问题分散到集群中。这种模式适合生成环境。
+相当于将客户端模式的客户端网卡流量暴增问题分散到集群中。这种模式适合生产环境。
 
 
 
 
---yarn模式提交任务
+--yarn模式提交任务 --Client方式 --默认方式
 ./spark-submit --master yarn --class org.apache.spark.examples.SparkPi ../lib/spark-examples-1.6.0-hadoop2.6.0.jar 100
 
-./spark-submit --master spark://node1:7077 --class org.apache.spark.examples.SparkPi ../lib/spark-examples-1.6.0-hadoop2.6.0.jar 100
+./spark-submit --master yarn --deploy-mode client --class org.apache.spark.examples.SparkPi ../lib/spark-examples-1.6.0-hadoop2.6.0.jar 100
+./spark-submit --master yarn-client --class org.apache.spark.examples.SparkPi ../lib/spark-examples-1.6.0-hadoop2.6.0.jar 100
+
+
+--yarn模式提交任务 --Client方式 --默认方流程
+1.NodeManager启动，并且向ResourceManager汇报信息，ResourceManager掌握集群资源
+2.在客户端提交任务，Driver会在客户端启动
+3.Driver向ResourceManager申请资源
+4.ResourceManager随机找一台NodeManager启动ApplicationMaster
+5.启动好的ApplicationMaster向ResourceManager申请资源用户启动Executor，ResourceManager返回一批NodeManager节点给ApplicationMaster
+6.ApplicationMaster去连接ResourceManager返回来的NodeManager去启动Executor，Executor里面有线程池(Thread Pool)
+7.Executor启动完成之后，会反向注册给客户端的Driver
+8.Driver向Executor发送Task
+9.Executor接收到Task，执行任务，并把计算结果返回给Driver
+10.Driver接收Executor计算的结果
+
+总结：
+在这种模式下面，我们在客户端看到Task执行的详细信息还有最终的结果。
+当在客户端提交多个application时，每个application都会启动自己的Driver
+这些Driver和Executor(NodeManager)有大量的通行，会造成客户端网卡浏览暴增问题，
+这种模式适合于测试，不适合生产环境。
+
+
+
+
+--yarn模式提交任务 --Custer方式
+./spark-submit --master yarn --deploy-mode cluster --class org.apache.spark.examples.SparkPi ../lib/spark-examples-1.6.0-hadoop2.6.0.jar 100
+
+./spark-submit --master yarn-cluster --class org.apache.spark.examples.SparkPi ../lib/spark-examples-1.6.0-hadoop2.6.0.jar 100
+
+--yarn模式提交任务 --Custer方式流程
+1.NodeManager启动，并且向ResourceManager汇报信息，ResourceManager掌握集群资源
+2.在客户端提交任务，客户端向ResourceManager申请启动ApplicationMaster
+3.ResourceManager随机找一台NodeManager启动ApplicationMaster，此时的ApplicationMaster就是Driver
+4.ApplicationMaster启动之后，向ResourceManager申请资源启动Executor
+5.ResourceManager向ApplicationMaster返回一批Executor资源
+6.ApplicationMaster连接并启动Executor
+7.Executor启动之后，反向注册给ApplicationMaster（Driver）
+8.ApplicationMaster发送Task给Executor
+9.Executor接收Task，执行任务，并把结果返回给ApplicationMaster
+10.ApplicationMaster接收Executor计算的结果（结果可以在Yarn的WebUI上面查看）
+
+总结：
+在这种模式下面，我们在客户端看不到Task执行的详细信息还有最终的结果。
+可以在WebUI上Completed Drivers里面可以查看到结果和执行的详细信息
+如果在客户端提交多个application，那么每个application的ApplicationMaster会被分散到集群的NodeManager节点中，
+相当于将客户端模式的客户端网卡流量暴增问题分散到集群中。这种模式适合生产环境。
+
+
+--Driver的功能：
+1.发送Task
+2.监控Task
+3.申请资源
+4.回收结果
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
