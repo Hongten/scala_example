@@ -213,6 +213,12 @@ standalone模式提交任务 - client方式提交任务流程 - 默认模式
 ./spark-submit --master spark://node1:7077 --deploy-mode cluster --class org.apache.spark.examples.SparkPi ../lib/spark-examples-1.6.0-hadoop2.6.0.jar 100
 
 
+standalone模式提交任务 - cluster方式提交任务流程
+1.Worker启动，并且向Master汇报信息
+2.
+
+
+
 ./spark-submit --master yarn --class org.apache.spark.examples.SparkPi ../lib/spark-examples-1.6.0-hadoop2.6.0.jar 100
 
 ./spark-submit --master spark://node1:7077 --class org.apache.spark.examples.SparkPi ../lib/spark-examples-1.6.0-hadoop2.6.0.jar 100
