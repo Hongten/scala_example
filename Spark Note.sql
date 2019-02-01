@@ -60,6 +60,16 @@ reduceByKey
 sortBy
 sortByKey
 sample
+join
+leftOuterJoin
+rightOuterJoin
+fullOuterJoin
+union
+intersection
+subtract
+distinct
+cogroup
+mapPartitions
 
 2.Action算子（触发Transformation算子执行，一个application中有几个Action算子，就有几个job）
 foreach
@@ -67,6 +77,7 @@ count
 first
 take(num)
 collect
+foreachPartition
 
 3.持久化算子
 cache 
@@ -295,31 +306,66 @@ standalone模式提交任务 - cluster方式提交任务流程
 
 
 
+--术语
+Master：standalone模式下面，资源管理的主节点，主进程
+Cluster Manager:在集群上获取资源的外部服务
+Worker：standalone模式下面，资源管理的从节点，从进程，管理本机资源的进程
+Application：基于Spark的用户程序，包含了Driver程序和运行在集群上的Executor程序
+Drive：用来连接Worker的程序
+Executor：是一个Worker进程所管理的节点上为某Application启动的一个进程，
+                    该进程负责运行任务，并且负责将数据存在内存或磁盘。
+                    每个应用都有各自独立的Executors。
+                    工作实际工作进程。
+Task：被Driver发送到Executor上被执行的工作单元
+Job：包含很多任务的Task的并行计算，可以看做和Action算子对应
+Stage：一个Job会被拆分为很多Task，每组Task被称为Stage（类似MapReduce中的Map Task和Reduce Task）
+            由一组并行的Task组成。
+
+
+--任务
+Application - 由Job组成（看Action算子） - 由Stage组成 - 由一组Task组成
+
+--资源
+主节点Master - 从节点Worker - 启动Executor - Thread Pool
+
+Task就是被发送到Executor里面的Thread Pool上执行的。
 
 
 
 
+--RDD宽窄依赖
+RDD之间有依赖关系
+窄依赖：
+父RDD和子RDD partition之间的依赖关系是一对一， 如：map, filter
+父RDD和子RDD partition之间的依赖关系是多对一，如union
+宽依赖：
+父RDD和子RDD partition之间的依赖关系是一对多，如：groupBykey
+在款依赖中有Shuffle，也即有I/O操作（网络，磁盘）
 
 
 
+--Spark处理数据模式， 即管道pipeline计算模式
+f3(f2(f1()))高阶函数展开形式处理数据
+在一个Stage中，基于内存，一条一条的处理数据
+
+MapReduce：
+1+1=2 -> 结果2落地 -> 2+1=3
+
+Spark：
+1+1+1=3 -> 在同一Stage里面结果没有落地
 
 
+--Stage的并行度
+由Stage中最后的RDD的partition个数决定
+
+--如何提高Stage的并行度
+在有Shuffle的算子里面设置numPartition
+如：reduceByKey(rdd, numPartition), join(rdd, numPartition)
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+--管道中的数据，上面时候落地
+1.shuffle write
+2.对RDD进程持久化操作（cache，persist， checkpoint）
 
 
 
