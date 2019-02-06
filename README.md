@@ -31,18 +31,18 @@
 * 5、一般到如下几行时，资源就申请完了，后面的就是处理逻辑了
 ```scala
 val conf = new SparkConf()
-conf.setMaster("local").setAppName("pipeline");
+conf.setMaster("local").setAppName("Spark Resource Apply Test");
 val sc = new SparkContext(conf)
 ```
 
-# 粗粒度资源申请和细粒度资源申请
-粗粒度资源申请(Spark）
+# 粗粒度资源申请(Spark）
 
 在Application执行之前，将所有的资源申请完毕，当资源申请成功后，才会进行任务的调度，当所有的task执行完成后，才会释放这部分资源。
-优点：在Application执行之前，所有的资源都申请完毕，每一个task运行时直接使用资源就可以了，不需要task运行时在执行前自己去申请资源，task启动就快了，task执行快了，stage执行就快了，job就快了，application执行就快了。
-缺点：直到最后一个task执行完成才会释放资源，集群的资源无法充分利用。当数据倾斜时更严重。
+* 优点：在Application执行之前，所有的资源都申请完毕，每一个task运行时直接使用资源就可以了，不需要task运行时在执行前自己去申请资源，task启动就快了，task执行快了，stage执行就快了，job就快了，application执行就快了。
+* 缺点：直到最后一个task执行完成才会释放资源，集群的资源无法充分利用。当数据倾斜时更严重。
 
-细粒度资源申请（MapReduce）
+# 细粒度资源申请（MapReduce）
+
 Application执行之前不需要先去申请资源，而是直接执行，让job中的每一个task在执行前自己去申请资源，task执行完成就释放资源。
-优点：集群的资源可以充分利用。
-缺点：task自己去申请资源，task启动变慢，Application的运行就相应的变慢了。
+* 优点：集群的资源可以充分利用。
+* 缺点：task自己去申请资源，task启动变慢，Application的运行就相应的变慢了。
