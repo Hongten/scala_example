@@ -9,7 +9,7 @@ import org.apache.spark.SparkConf
 import org.apache.spark.SparkContext
 
 /**
- * 该方法可以把获取到RDD中的partition索引
+ * 该方法可以获取到RDD中的partition索引
  *
  * @author Hongten
  * @created 6 Feb, 2019
