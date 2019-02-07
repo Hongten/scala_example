@@ -80,4 +80,5 @@ object Top5ProvincePV {
     var dataGeneratePVUV = DataGeneratePVUV
     dataGeneratePVUV.generateData
   }
+  
 }
