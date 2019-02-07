@@ -38,7 +38,7 @@ object Top5ProvincePV {
     })
 
     //<provinceName, 1>
-    val provinceNameAndValueRDD = filteredRDD.map(line => {
+    var provinceNameAndValueRDD = filteredRDD.map(line => {
       new Tuple2(line.split("\t")(1), 1)
     })
 
