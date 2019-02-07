@@ -26,6 +26,10 @@ object Reduce {
 
     val result = sc.parallelize(arrayData, 3).reduce(_ * _)
 
+    /**
+     * output:
+     * result : 180
+     */
     println("result : " + result)
     sc.stop
 
