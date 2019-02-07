@@ -20,7 +20,7 @@ object Subtract {
   def main(args: Array[String]) {
 
     val conf = new SparkConf
-    conf.setMaster("local").setAppName("left join")
+    conf.setMaster("local").setAppName("sbustract")
 
     val sc = new SparkContext(conf)
 

@@ -19,7 +19,7 @@ object Intersection {
   def main(args: Array[String]) {
 
     val conf = new SparkConf
-    conf.setMaster("local").setAppName("left join")
+    conf.setMaster("local").setAppName("intersection")
 
     val sc = new SparkContext(conf)
 

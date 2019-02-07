@@ -20,7 +20,7 @@ object Distinct {
 
   def main(args: Array[String]) {
     val conf = new SparkConf
-    conf.setMaster("local").setAppName("remove duplicates")
+    conf.setMaster("local").setAppName("distinct")
 
     val sc = new SparkContext(conf)
 
