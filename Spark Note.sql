@@ -407,7 +407,7 @@ Spark资源调度和任务调度的流程：
 4、有SparkContext端就是Driver端。
 5、一般到如下几行时，资源就申请完了，后面的就是处理逻辑了
 val conf = new SparkConf()
-conf.setMaster("local").setAppName("pipeline");
+conf.setMaster("local").setAppName("Spark Resource Apply Test");
 val sc = new SparkContext(conf)
 
 粗粒度资源申请和细粒度资源申请
@@ -424,13 +424,43 @@ Application执行之前不需要先去申请资源，而是直接执行，让job
 
 
 
+--Spark资源调度
+1.Executor在集群中分散启动，利于数据处理的本地化
+2.如果提交任务不指定--executor-cores，集群默认在每个Worker上启动1个Executor，这个Executor会使用这台Worker上面的所有Core和1G内存
+3.如果想要在一台Worker上面启动多个Executor，那么提交任务要指定--executor-cores
+4.启动Executor不仅和Core有关，还和内存有关
+5.提交Application要指定--total-executor-cores，否则，当前Application会使用集群所有的Core
+
+
+--广播变量 - 当Executor端使用到Driver端的变量
+1.不适用广播变量，Executor中有多少task就有多少变量副本
+2.使用广播变量，每个Executor只有一份Driver端的变量
+
+注意：
+1.不可以将RDD广播出去，可以将RDD的结果广播出去
+2.只能在Driver端定义，在Executor端不能改变
 
 
 
+--累加器 - accumulator相当于集群中统筹大变量
+1.累加器只能在Driver定义并初始化，不能再Executor端定义初始化
+2.累加器取值accumulator.value只能在Driver读取，不能在Executor端accumulator.value读取值
 
 
 
+--spark-shell
+./spark-shell --master spark://node1:7077,node2:7077
 
+sc.textFile("hdfs://node1:8020/usr/input/wordcount1/word3.txt").flatMap(_.split(" ")).map((_,1)).reduceByKey(_+_).foreach(println)
+
+spark-job
+http://node1:4040
+
+sc.textFile("hdfs://node1:8020/usr/input/wordcount2").cache().collect();
+http://node1:4040/storage/
+
+--删除HDFS上面的文件
+./hdfs dfs -rm -r /usr/input/wordcount/word2.txt._COPYING_
 
 
 
