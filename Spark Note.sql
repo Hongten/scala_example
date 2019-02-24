@@ -433,7 +433,7 @@ Application执行之前不需要先去申请资源，而是直接执行，让job
 
 
 --广播变量 - 当Executor端使用到Driver端的变量
-1.不适用广播变量，Executor中有多少task就有多少变量副本
+1.不使用广播变量，Executor中有多少task就有多少变量副本
 2.使用广播变量，每个Executor只有一份Driver端的变量
 
 注意：
@@ -463,6 +463,290 @@ http://node1:4040/storage/
 ./hdfs dfs -rm -r /usr/input/wordcount/word2.txt._COPYING_
 
 
+---------------------------------------------------
+--启用spark日志
+./spark-shell --master spark://node1:7077 --name aaa1 --conf spark.eventLog.enabled=true --conf spark.eventLog.dir=hdfs://node1:8020/usr/input/wordcount
+
+
+--配置spark日志
+cd /home/spark-1.6.0/conf
+cp spark-defaults.conf.template spark-defaults.conf
+vi spark-defaults.conf
+
+--启用spark日志
+spark.eventLog.enabled           true
+spark.eventLog.dir               hdfs://node1:8020/spark/log
+
+:wq
+
+
+cd /home/spark-1.6.0/bin
+./spark-shell --master spark://node1:7077 --name bbc
+
+
+
+---------------------------------------------------
+--启用历史日志
+cd /home/spark-1.6.0/conf
+cp spark-defaults.conf.template spark-defaults.conf
+
+--配置历史日志目录，是否压缩日志：true，default为false
+--压缩日志文件占用空间少
+spark.history.fs.logDirectory               hdfs://node1:8020/spark/log
+spark.eventLog.compress                     true
+
+
+:wq
+
+
+cd /home/spark-1.6.0/sbin/
+./start-history-server.sh
+
+--浏览器输入，
+http://node1:18080/
+
+
+
+
+---------------------------------------------------
+--配置Spark Master HA - 指的是Standalone集群
+--使用ZooKeeper - 分布式协调服务，保存元数据，自动切换
+--在node1上面配置
+cd /home/spark-1.6.0/conf/
+
+vi spark-env.sh
+
+export SPARK_DAEMON_JAVA_OPTS="-Dspark.deploy.recoveryMode=ZOOKEEPER -Dspark.deploy.zookeeper.url=node1:2181,node2:2181,node3:2181 -Dspark.deploy.zookeeper.dir=/opt/spark"
+
+:wq
+
+--分发到node2，node3，node4上面去
+scp ./spark-env.sh root@node2:/home/spark-1.6.0/conf/
+scp ./spark-env.sh root@node3:/home/spark-1.6.0/conf/
+scp ./spark-env.sh root@node4:/home/spark-1.6.0/conf/
+
+
+--进入node2
+cd /home/spark-1.6.0/conf/
+vi spark-env.sh
+
+export SPARK_MASTER_IP=node2
+
+
+--配置完毕
+--进入node1,启动spark
+cd /home/spark-1.6.0/sbin
+./start-all.sh
+
+--浏览器输入
+http://node1:8080/
+
+
+--进入node2，单独启动master，此时这个master为standby
+cd /home/spark-1.6.0/sbin
+./start-master.sh 
+
+
+--浏览器输入
+http://node2:8080/
+
+--状态变化
+STANDBY
+RECOVERING
+ALIVE
+
+
+--提交任务
+/root/spark-1.6.0/bin
+./spark-submit --master spark://node1:7077,node2:7077 --class org.apache.spark.examples.SparkPi ../lib/spark-examples-1.6.0-hadoop2.6.0.jar 100
+
+
+
+
+
+---------------------------------------------------
+--Spark Shuffle
+--参考：https://blog.csdn.net/zhanglh046/article/details/78360762
+
+reduceByKey的含义
+reduceByKey会将上一个RDD中的每一个key对应的所有value聚合成一个value，
+然后生成一个新的RDD，元素类型是<key, value>对的形式，这样每一个key对
+一个聚合起来的value
+
+
+如何聚合
+Shuffle Write：上一个stage的每个map task就必须保证将自己处理的
+当前分区中的数据相同的key写入一个分区文件中，可能会写入多个不同的分区文件中
+
+Shuffle Read：reduce task就会从上一个stage的所有task所在的机器上
+寻找属于自己的的那些分区文件，这样就可以保证每一个key所对应的value都会
+会聚到同一个节点上去处理和聚合
+
+
+--普通机制
+HashShuffle过程中可能会产生的问题-buffer大小为32k
+1.小文件过多，耗时低效的IO操作
+2.OOM，读写文件以及缓存过多
+
+--优化后的HashShuffleManager
+每一个核中跑的task共用一份Buffer缓冲区
+小文件个数取决于核个数和reduce个数
+
+
+--SortShuffle运行原理  --version 1.2以后
+1.普通机制
+2.bypass机制
+
+
+普通机制过程：
+map task处理数据，首先将结果写入内存数据结构中，这个内存数据结构大小初始为5M。
+如果map task一直往内存数据结构中写入数据的时候，内存数据结构就会被写满，因此，在
+这种机制下面，有一种不定期估算机制去估算内存数据结构的大小，假设下一次写入大小为5.01M，
+那么内存数据结构就会满，它会申请该大小的2倍的值，再减去原来的值5M，即5.01*2-5=5.02M，
+那么现在的内存数据结构大小为5M+5.02M=10.02M。以此类推，一直估算下去，当申请不到内存的时候，
+就会溢写磁盘，在溢写的过程中有排序操作。然后分批写入磁盘文件，每批为1万条数据。最后形成两个磁盘
+小文件，即索引文件和磁盘文件，即小文件个数为2*M(map task个数)
+
+为了解决磁盘IO，把HashShuffle换成了SortShuffle
+
+
+普通机制和bypass机制区别
+bypass机制少了排序操作
+
+
+bypass运行机制的触发条件如下
+shuffle reduce task数量小于spark.shuffle.sort.bypassMergeThreshold参数的值（默认为200）
+
+--官网配置
+http://spark.apache.org/docs/1.6.3/configuration.html#shuffle-behavior
+
+
+
+---------------------------------------------------
+--Spark shuffle寻址
+MapOutputTracker管理磁盘小文件
+主从关系
+MapOutputTrackerMaster(Driver)
+MapOutputTrackerWorker(Executor)
+
+BlockManager块管理者
+主从关系
+BlockManagerMaster(Driver)
+ DiskStore 管理磁盘数据
+ MemeoryStore 管理内存数据
+ ConnectionManager 连接其他BlockManager
+ BlockTransferService 拉取数据
+BlockManagerWorker(Executor)
+ DiskStore 管理磁盘数据
+ MemeoryStore 管理内存数据
+ ConnectionManager 连接其他BlockManager
+ BlockTransferService 拉取数据
+
+
+1.map task处理完数据后，会将数据结果和落地磁盘位置封装到MapStatus对象中，通过MapOutputTrackerWorker汇报
+给Driver中的MapOutputTrackerMaster，Driver掌握了磁盘小文件位置
+2.Reduce Task拉取数据之前向Driver中的MapOutputTrackerMaster要磁盘小文件的位置，MapOutputTrackerMaster
+返回磁盘小文件的位置
+3.Reduce Task中的BlockManagerWorker去连接map task中的BlockManagerWorker
+4.BlockTransferService默认启动5个子线程拉取数据，默认这个5个task一次拉取的数据量不能超过48M
+
+
+reduce OOM问题？
+1.减少拉取数据量
+2.增大Executor总体内存
+3.增加shuffle内存比例
+
+
+
+
+---------------------------------------------------
+--Spark 内存管理
+--参考：http://spark.apache.org/docs/1.6.3/configuration.html#memory-management
+主要是指Worker里面Executor的内存管理
+Spark在1.6之前使用的是静态内存管理；1.6之后，使用统一内存管理
+
+静态内存管理把Executor分为三部分 配置： spark.memory.useLegacyMode=true
+20% - task运行（1-spark.shuffle.memoryFraction-spark.storage.memoryFraction）
+20%（spark.shuffle.memoryFraction） - 20%预留内存， 80%shuffle聚合内存
+60%（spark.storage.memoryFraction） - 10%预留内存， 90%-20%数据反序列化（spark.storage.unrollFraction）， 80%RDD的缓存和广播变量
+
+
+Reduce端OOM解决方法
+1.减少拉取数据量<48M
+2.增大Executor总体内存
+3.增加shuffle内存比例
+
+
+
+Executor统一内存管理，也分为三部分  配置：spark.memory.useLegacyMode=false   version 1.6以后默认开启同一内存管理
+300M预留
+(总内存-300M)*0.25 task运行(1-spark.memory.fraction=0.25)
+
+(总内存-300M)*0.75（spark.memory.fraction） - A.(总内存-300M)*0.75*0.5（spark.memory.storageFraction） -RDD的缓存和广播变量
+                    B.(总内存-300M)*0.75*0.5 -shuffle聚合内存
+					A和B之前内存可以相互借用
+
+
+
+
+
+---------------------------------------------------
+--Spark Shuffle调优
+1:sparkconf.set("spark.shuffle.file.buffer","64K") --不建议使用，因为这么写相当于硬编码 --最高
+2：在conf/spark-defaults.conf ---不建议使用，相当于硬编码 --第三
+3：./spark-submit --conf spark.shuffle.file.buffer=64 --conf spark.reducer.maxSizeInFlight=96 --建议使用 --第二
+
+
+spark.shuffle.file.buffer
+默认值：32k
+参数说明：该参数用于设置shuffle write task的BufferedOutputStream的buffer缓冲大小。将数据写到磁盘文件之前，会先写入buffer缓冲中，待缓冲写满之后，才会溢写到磁盘。
+调优建议：如果作业可用的内存资源较为充足的话，可以适当增加这个参数的大小（比如64k），从而减少shuffle write过程中溢写磁盘文件的次数，也就可以减少磁盘IO次数，进而提升性能。在实践中发现，合理调节该参数，性能会有1%~5%的提升。
+参考：http://spark.apache.org/docs/1.6.3/configuration.html#shuffle-behavior
+
+spark.reducer.maxSizeInFlight
+默认值：48m 
+参数说明：该参数用于设置shuffle read task的buffer缓冲大小，而这个buffer缓冲决定了每次能够拉取多少数据。
+调优建议：如果作业可用的内存资源较为充足的话，可以适当增加这个参数的大小（比如96m），从而减少拉取数据的次数，也就可以减少网络传输的次数，进而提升性能。在实践中发现，合理调节该参数，性能会有1%~5%的提升。
+参考：http://spark.apache.org/docs/1.6.3/configuration.html#shuffle-behavior
+
+
+spark.shuffle.io.maxRetries
+默认值：3
+参数说明：shuffle read task从shuffle write task所在节点拉取属于自己的数据时，如果因为网络异常导致拉取失败，是会自动进行重试的。该参数就代表了可以重试的最大次数。如果在指定次数之内拉取还是没有成功，就可能会导致作业执行失败。
+调优建议：对于那些包含了特别耗时的shuffle操作的作业，建议增加重试最大次数（比如60次），以避免由于JVM的full gc或者网络不稳定等因素导致的数据拉取失败。在实践中发现，对于针对超大数据量（数十亿~上百亿）的shuffle过程，调节该参数可以大幅度提升稳定性。
+shuffle file not find    taskScheduler不负责重试task，由DAGScheduler负责重试stage
+参考：http://spark.apache.org/docs/1.6.3/configuration.html#shuffle-behavior
+
+
+spark.shuffle.io.retryWait
+默认值：5s
+参数说明：具体解释同上，该参数代表了每次重试拉取数据的等待间隔，默认是5s。
+调优建议：建议加大间隔时长（比如60s），以增加shuffle操作的稳定性。
+参考：http://spark.apache.org/docs/1.6.3/configuration.html#shuffle-behavior
+
+
+spark.shuffle.memoryFraction
+默认值：0.2
+参数说明：该参数代表了Executor内存中，分配给shuffle read task进行聚合操作的内存比例，默认是20%。
+调优建议：如果内存充足，而且很少使用持久化操作，建议调高这个比例，给shuffle read的聚合操作更多内存，以避免由于内存不足导致聚合过程中频繁读写磁盘。在实践中发现，合理调节该参数可以将性能提升10%左右。
+参考：http://spark.apache.org/docs/1.6.3/configuration.html#memory-management
+
+spark.shuffle.manager
+默认值：sort|hash
+参数说明：该参数用于设置ShuffleManager的类型。Spark 1.5以后，有三个可选项：hash、sort和tungsten-sort。HashShuffleManager是Spark 1.2以前的默认选项，但是Spark 1.2以及之后的版本默认都是SortShuffleManager了。tungsten-sort与sort类似，但是使用了tungsten计划中的堆外内存管理机制，内存使用效率更高。
+调优建议：由于SortShuffleManager默认会对数据进行排序，因此如果你的业务逻辑中需要该排序机制的话，则使用默认的SortShuffleManager就可以；而如果你的业务逻辑不需要对数据进行排序，那么建议参考后面的几个参数调优，通过bypass机制或优化的HashShuffleManager来避免排序操作，同时提供较好的磁盘读写性能。这里要注意的是，tungsten-sort要慎用，因为之前发现了一些相应的bug。
+参考：http://spark.apache.org/docs/1.6.3/configuration.html#shuffle-behavior
+
+spark.shuffle.sort.bypassMergeThreshold----针对SortShuffle
+默认值：200
+参数说明：当ShuffleManager为SortShuffleManager时，如果shuffle read task的数量小于这个阈值（默认是200），则shuffle write过程中不会进行排序操作，而是直接按照未经优化的HashShuffleManager的方式去写数据，但是最后会将每个task产生的所有临时磁盘文件都合并成一个文件，并会创建单独的索引文件。
+调优建议：当你使用SortShuffleManager时，如果的确不需要排序操作，那么建议将这个参数调大一些，大于shuffle read task的数量。那么此时就会自动启用bypass机制，map-side就不会进行排序了，减少了排序的性能开销。但是这种方式下，依然会产生大量的磁盘文件，因此shuffle write性能有待提高。
+参考：http://spark.apache.org/docs/1.6.3/configuration.html#shuffle-behavior
+
+spark.shuffle.consolidateFiles----针对HashShuffle
+默认值：false
+参数说明：如果使用HashShuffleManager，该参数有效。如果设置为true，那么就会开启consolidate机制，会大幅度合并shuffle write的输出文件，对于shuffle read task数量特别多的情况下，这种方法可以极大地减少磁盘IO开销，提升性能。
+调优建议：如果的确不需要SortShuffleManager的排序机制，那么除了使用bypass机制，还可以尝试将spark.shffle.manager参数手动指定为hash，使用HashShuffleManager，同时开启consolidate机制。在实践中尝试过，发现其性能比开启了bypass机制的SortShuffleManager要高出10%~30%。
 
 
 
@@ -470,35 +754,11 @@ http://node1:4040/storage/
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+---------------------------------------------------
+--广播变量
+1.不能讲RDD广播出去，可以将RDD的结果广播出去
+2.广播变量只能在Driver定义，在Executor端使用，不能在Executor端改变
+3.如果不使用广播变量，在一个Executor中有多少个task，就有多少个变量副本，如果使用广播变量，在每个Executor中只有一份Driver端的广播变量副本
 
 
 
